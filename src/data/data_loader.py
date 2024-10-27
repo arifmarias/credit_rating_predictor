@@ -1,145 +1,104 @@
+from pathlib import Path
 import pandas as pd
-import numpy as np
-from typing import Dict, Any, List
+from typing import Tuple, Dict
+from datetime import datetime
 import logging
 from ..utils.config import config
 
 logger = logging.getLogger(__name__)
 
-class RatingCalibrator:
+class DataLoader:
     def __init__(self):
-        self.industry_adjustments = {}
-        self.market_conditions = {}
-        self.rating_scale = [
-            'AAA', 'AA+', 'AA', 'AA-',
-            'A+', 'A', 'A-',
-            'BBB+', 'BBB', 'BBB-',
-            'BB+', 'BB', 'BB-',
-            'B+', 'B', 'B-',
-            'CCC+', 'CCC', 'CCC-',
-            'CC', 'C', 'D'
-        ]
-    
-    def load_industry_adjustments(self, industry_data: pd.DataFrame):
-        """Load industry-specific rating adjustments"""
-        self.industry_adjustments = (
-            industry_data
-            .set_index('industry')
-            ['adjustment_factor']
-            .to_dict()
-        )
-    
-    def update_market_conditions(self, market_data: Dict[str, float]):
-        """Update market condition factors"""
-        self.market_conditions = market_data
-    
-    def _calculate_industry_factor(self, industry: str) -> float:
-        """Calculate industry-specific adjustment factor"""
-        return self.industry_adjustments.get(industry, 1.0)
-    
-    def _calculate_market_factor(self) -> float:
-        """Calculate market condition adjustment factor"""
-        if not self.market_conditions:
-            return 1.0
-            
-        # Weighted average of market conditions
-        weights = {
-            'market_volatility': 0.3,
-            'interest_rates': 0.3,
-            'economic_growth': 0.4
-        }
+        self.config = config.data
         
-        market_factor = sum(
-            self.market_conditions.get(factor, 0) * weight
-            for factor, weight in weights.items()
-        )
+    def load_news_articles(self) -> pd.DataFrame:
+        """Load news articles dataset"""
+        df = pd.read_csv(self.config.news_file)
+        required_cols = ['article_id', 'company_id', 'text', 'date']
+        if not all(col in df.columns for col in required_cols):
+            raise ValueError(f"News articles file missing required columns: {required_cols}")
         
-        return market_factor
+        # Convert date to datetime
+        df['date'] = pd.to_datetime(df['date'])
+        return df
     
-    def _adjust_rating_notches(self, base_rating: str,
-                             adjustment: float) -> str:
-        """Adjust rating by specified number of notches"""
-        try:
-            current_index = self.rating_scale.index(base_rating)
-            adjusted_index = int(current_index + adjustment)
-            adjusted_index = max(0, min(adjusted_index, len(self.rating_scale) - 1))
-            return self.rating_scale[adjusted_index]
-        except ValueError:
-            logger.warning(f"Invalid rating: {base_rating}")
-            return base_rating
+    def load_company_profiles(self) -> pd.DataFrame:
+        """Load company profiles"""
+        df = pd.read_csv(self.config.company_file)
+        required_cols = ['company_id', 'industry', 'size', 'country']
+        if not all(col in df.columns for col in required_cols):
+            raise ValueError(f"Company profiles file missing required columns: {required_cols}")
+        return df
     
-    def calibrate_rating(self, 
-                        predicted_rating: str,
-                        company_data: Dict[str, Any],
-                        sentiment_data: Dict[str, float] = None) -> Dict[str, Any]:
-        """Calibrate predicted rating based on various factors"""
-        # Calculate adjustment factors
-        industry_factor = self._calculate_industry_factor(
-            company_data.get('industry', 'unknown')
-        )
-        market_factor = self._calculate_market_factor()
+    def load_credit_ratings(self) -> pd.DataFrame:
+        """Load historical credit ratings"""
+        df = pd.read_csv(self.config.ratings_file)
+        required_cols = ['company_id', 'rating', 'date']
+        if not all(col in df.columns for col in required_cols):
+            raise ValueError(f"Credit ratings file missing required columns: {required_cols}")
         
-        # Calculate sentiment adjustment if available
-        sentiment_adjustment = 0
-        if sentiment_data:
-            sentiment_score = sentiment_data.get('avg_sentiment', 0)
-            sentiment_adjustment = np.sign(sentiment_score) * min(
-                abs(sentiment_score), 2
-            )
+        # Convert date to datetime
+        df['date'] = pd.to_datetime(df['date'])
+        return df
+    
+    def load_financial_metrics(self) -> pd.DataFrame:
+        """Load financial metrics"""
+        df = pd.read_csv(self.config.metrics_file)
+        required_cols = ['company_id', 'date', 'revenue', 'debt_ratio', 'current_ratio']
+        if not all(col in df.columns for col in required_cols):
+            raise ValueError(f"Financial metrics file missing required columns: {required_cols}")
         
-        # Combine adjustments
-        total_adjustment = (
-            industry_factor +
-            market_factor +
-            sentiment_adjustment
+        # Convert date to datetime
+        df['date'] = pd.to_datetime(df['date'])
+        return df
+    
+    def combine_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """Combine all data sources into features and targets"""
+        news_df = self.load_news_articles()
+        companies_df = self.load_company_profiles()
+        ratings_df = self.load_credit_ratings()
+        metrics_df = self.load_financial_metrics()
+        
+        # Group news articles by company and calculate aggregates
+        news_features = (
+            news_df.groupby('company_id')
+            .agg({
+                'text': list,
+                'date': lambda x: list(x)
+            })
+            .reset_index()
         )
         
-        # Apply adjustments
-        calibrated_rating = self._adjust_rating_notches(
-            predicted_rating,
-            total_adjustment
+        # Get latest ratings for each company
+        latest_ratings = (
+            ratings_df
+            .sort_values('date')
+            .groupby('company_id')
+            .last()
+            .reset_index()
         )
+        
+        # Combine all features
+        combined_df = (
+            companies_df
+            .merge(news_features, on='company_id', how='left')
+            .merge(latest_ratings[['company_id', 'rating']], on='company_id', how='left')
+            .merge(metrics_df, on='company_id', how='left')
+        )
+        
+        return combined_df
+
+    def get_train_test_split(self, df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
+        """Split data into train, validation, and test sets"""
+        # Shuffle data
+        df = df.sample(frac=1, random_state=config.random_seed)
+        
+        # Calculate split indices
+        train_idx = int(len(df) * self.config.train_ratio)
+        val_idx = int(len(df) * (self.config.train_ratio + self.config.validation_ratio))
         
         return {
-            'original_rating': predicted_rating,
-            'calibrated_rating': calibrated_rating,
-            'adjustments': {
-                'industry': industry_factor,
-                'market': market_factor,
-                'sentiment': sentiment_adjustment,
-                'total': total_adjustment
-            }
+            'train': df[:train_idx],
+            'validation': df[train_idx:val_idx],
+            'test': df[val_idx:]
         }
-    
-    def batch_calibrate(self, 
-                       predictions: pd.DataFrame,
-                       companies: pd.DataFrame,
-                       sentiments: pd.DataFrame = None) -> pd.DataFrame:
-        """Calibrate ratings for multiple predictions"""
-        calibrated_ratings = []
-        
-        for _, row in predictions.iterrows():
-            company_data = companies[
-                companies['company_id'] == row['company_id']
-            ].iloc[0].to_dict()
-            
-            sentiment_data = None
-            if sentiments is not None:
-                sentiment_data = sentiments[
-                    sentiments['company_id'] == row['company_id']
-                ].iloc[0].to_dict()
-            
-            calibration = self.calibrate_rating(
-                row['predicted_rating'],
-                company_data,
-                sentiment_data
-            )
-            
-            calibrated_ratings.append({
-                'company_id': row['company_id'],
-                'original_rating': calibration['original_rating'],
-                'calibrated_rating': calibration['calibrated_rating'],
-                **calibration['adjustments']
-            })
-        
-        return pd.DataFrame(calibrated_ratings)

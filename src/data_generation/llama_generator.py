@@ -8,6 +8,7 @@ import logging
 from typing import List, Dict, Any
 import os
 from tqdm import tqdm
+import torch
 
 # Enhanced logging setup with colors (using ANSI escape codes)
 class ColorFormatter(logging.Formatter):
@@ -37,9 +38,10 @@ logger.addHandler(console_handler)
 
 class LlamaDataGenerator:
     def __init__(self, 
-                 n_companies=100, 
+                 n_companies=10, 
                  n_articles_per_company=5,
                  model_name="llama2"):
+        self.device = torch.device('cuda' if torch.cuda.is_available() and config.model.use_gpu else 'cpu')
         self.n_companies = n_companies
         self.n_articles_per_company = n_articles_per_company
         self.model_name = model_name

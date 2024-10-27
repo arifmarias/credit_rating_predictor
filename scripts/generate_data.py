@@ -18,7 +18,7 @@ def parse_arguments():
     parser.add_argument(
         '--companies',
         type=int,
-        default=100,
+        default=10,
         help='Number of companies to generate (default: 100)'
     )
     parser.add_argument(
