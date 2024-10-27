@@ -1,0 +1,20 @@
+model:
+  topic_model_name: "llama2"
+  sentiment_model_name: "ProsusAI/finbert"
+  rating_model_type: "random_forest"
+  use_gpu: true
+  batch_size: 32
+  max_length: 512
+
+data:
+  news_file: "data/news_articles.csv"
+  company_file: "data/company_profiles.csv"
+  ratings_file: "data/credit_ratings.csv"
+  metrics_file: "data/financial_metrics.csv"
+  train_ratio: 0.8
+  validation_ratio: 0.1
+  test_ratio: 0.1
+
+random_seed: 42
+log_level: "INFO"
+output_dir: "output"
