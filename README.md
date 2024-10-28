@@ -2,6 +2,8 @@
 
 A comprehensive system for predicting credit ratings using large language models (LLama2), financial metrics, and news sentiment analysis.
 
+[X] Author: Mohammed Arif
+
 ## Project Structure
 ```
 credit_rating_predictor/
