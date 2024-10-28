@@ -28,6 +28,9 @@ credit_rating_predictor/
 ├── config.yaml
 └── main.py
 ```
+## Execution Sequence
+
+![alt text](Dataflow.png)
 
 ## Detailed Component Description
 
@@ -183,6 +186,276 @@ X, feature_names = preprocessor.prepare_features(
 - Integrates various signals
 - Produces initial ratings
 
-## Execution Sequence
+### 5. Main Script System (main.py)
 
-![alt text](Dataflow.png)
+**What it does:**
+- Orchestrates the entire prediction process
+- Handles component initialization
+- Manages data flow
+- Controls execution sequence
+
+**Components and Their Purpose:**
+
+1. **Logging Setup**
+```python
+def setup_logging():
+    log_dir = Path("logs")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file = log_dir / f"credit_rating_{timestamp}.log"
+```
+- Creates timestamped log files
+- Enables both console and file logging
+- Maintains execution history
+
+2. **Component Initialization**
+```python
+data_loader = DataLoader()
+preprocessor = DataPreprocessor()
+sentiment_analyzer = SentimentAnalyzer()
+rating_predictor = RatingPredictor()
+calibrator = RatingCalibrator()
+```
+- Initializes all necessary components
+- Sets up processing pipeline
+- Prepares system for execution
+
+3. **Data Loading and Processing**
+```python
+# Load data
+news_data = data_loader.load_news_articles()
+company_data = data_loader.load_company_profiles()
+ratings_data = data_loader.load_credit_ratings()
+financial_data = data_loader.load_financial_metrics()
+
+# Preprocess
+combined_data = data_loader.combine_data()
+X, feature_names = preprocessor.prepare_features(combined_data, ratings_data)
+```
+- Loads required datasets
+- Combines different data sources
+- Prepares features for modeling
+
+4. **Model Training and Prediction**
+```python
+metrics = rating_predictor.train(
+    data_splits['train'][feature_names],
+    data_splits['train']['rating'],
+    data_splits['validation'][feature_names],
+    data_splits['validation']['rating'],
+    optimize=True
+)
+```
+- Trains the prediction model
+- Validates performance
+- Generates predictions
+
+### 6. Calibration System (calibrator.py)
+
+**What it does:**
+- Adjusts raw model predictions
+- Incorporates domain knowledge
+- Applies business rules
+
+**Why we need it:**
+- Improves prediction accuracy
+- Adds industry-specific adjustments
+- Handles special cases
+
+**How it works:**
+```python
+class RatingCalibrator:
+    def __init__(self):
+        self.industry_adjustments = {}
+        self.market_conditions = {}
+        
+    def calibrate_rating(self, 
+                        predicted_rating: str,
+                        company_data: Dict[str, Any],
+                        sentiment_data: Dict[str, float]) -> Dict[str, Any]:
+        # Apply industry adjustments
+        # Consider market conditions
+        # Factor in sentiment
+        return calibrated_rating
+```
+
+### 7. Error Handling and Logging
+
+**Logging System:**
+```python
+logger = logging.getLogger(__name__)
+
+# Information logging
+logger.info("Starting credit rating prediction process")
+
+# Error handling
+try:
+    # Process execution
+    logger.info("Loading data...")
+except Exception as e:
+    logger.error(f"Error in process: {str(e)}")
+    raise
+```
+
+**Error Types and Handling:**
+1. Data Loading Errors
+   - Missing files
+   - Invalid data format
+   - Corrupted data
+
+2. Processing Errors
+   - Invalid features
+   - Data type mismatches
+   - Missing values
+
+3. Model Errors
+   - Training failures
+   - Prediction errors
+   - Invalid output
+
+### 8. Setup and Installation
+
+1. **Environment Setup**
+```bash
+# Create virtual environment
+python -m venv venv
+
+# Activate environment
+# Windows
+venv\Scripts\activate
+# Linux/Mac
+source venv/bin/activate
+```
+
+2. **Install Dependencies**
+```bash
+pip install -r requirements.txt
+```
+
+3. **Ollama Setup**
+```bash
+# Install Ollama
+curl https://ollama.ai/install.sh | sh
+
+# Start Ollama
+ollama serve
+
+# Pull Llama2
+ollama pull llama2
+```
+
+### 9. Usage Examples
+
+1. **Generate Synthetic Data**
+```python
+from src.data_generation.llama_generator import LlamaDataGenerator
+
+# Initialize generator
+generator = LlamaDataGenerator(
+    n_companies=100,
+    n_articles_per_company=5
+)
+
+# Generate data
+datasets = generator.generate_all_data()
+```
+
+2. **Run Complete Analysis**
+```bash
+# Generate data first
+python scripts/generate_data.py
+
+# Run main analysis
+python main.py
+```
+
+3. **Use Individual Components**
+```python
+# Use sentiment analyzer
+from src.models.sentiment_analyzer import SentimentAnalyzer
+
+analyzer = SentimentAnalyzer()
+sentiments = analyzer.analyze_sentiment(articles)
+
+# Use rating predictor
+from src.models.rating_predictor import RatingPredictor
+
+predictor = RatingPredictor()
+ratings = predictor.predict(features)
+```
+
+### 10. Output Structure
+
+1. **Data Files**
+```
+data/
+├── company_profiles.csv
+├── news_articles.csv
+├── credit_ratings.csv
+└── financial_metrics.csv
+```
+
+2. **Results**
+```
+output/
+├── predictions_[timestamp].csv
+├── model_[timestamp].joblib
+└── performance_metrics_[timestamp].json
+```
+
+3. **Logs**
+```
+logs/
+└── credit_rating_[timestamp].log
+```
+
+### 11. Best Practices
+
+1. **Code Organization**
+   - Keep related functionality together
+   - Use clear file and function names
+   - Maintain consistent coding style
+
+2. **Error Handling**
+   - Always use try-except blocks
+   - Log errors appropriately
+   - Provide meaningful error messages
+
+3. **Configuration**
+   - Use config files for parameters
+   - Never hardcode values
+   - Document all configuration options
+
+4. **Data Processing**
+   - Validate input data
+   - Handle missing values
+   - Document data transformations
+
+### 12. Troubleshooting
+
+Common issues and solutions:
+
+1. **Ollama Connection Issues**
+```
+Error: Could not connect to Ollama
+Solution: Ensure Ollama is running with 'ollama serve'
+```
+
+2. **Memory Issues**
+```
+Error: MemoryError during processing
+Solution: Reduce batch_size in config.yaml
+```
+
+3. **Model Loading Issues**
+```
+Error: Model not found
+Solution: Ensure all models are properly downloaded
+```
+
+### 13. Contributing
+
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
